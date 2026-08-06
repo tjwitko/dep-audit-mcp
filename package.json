@@ -1,0 +1,16 @@
+{
+  "name": "dep-audit-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing a check_dependencies tool backed by OSV-Scanner, for gating new dependencies (any language OSV-Scanner supports) on critical/high vulnerabilities before they're trusted.",
+  "main": "index.mjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^4.4.3"
+  },
+  "license": "ISC",
+  "scripts": {
+    "test": "node --check index.mjs"
+  }
+}

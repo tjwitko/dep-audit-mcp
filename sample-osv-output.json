@@ -1,0 +1,124 @@
+{
+  "results": [
+    {
+      "source": {
+        "path": "/example/package-lock.json",
+        "type": "lockfile"
+      },
+      "packages": [
+        {
+          "package": {
+            "name": "lodash",
+            "version": "4.17.4",
+            "ecosystem": "npm"
+          },
+          "groups": [
+            {
+              "ids": [
+                "GHSA-29mw-wpgm-hmr9"
+              ],
+              "aliases": [
+                "CVE-2020-28500",
+                "GHSA-29mw-wpgm-hmr9"
+              ],
+              "max_severity": "5.3"
+            },
+            {
+              "ids": [
+                "GHSA-35jh-r3h4-6jhm",
+                "GHSA-r5fr-rjxr-66jc"
+              ],
+              "aliases": [
+                "CVE-2021-23337",
+                "CVE-2026-4800",
+                "GHSA-35jh-r3h4-6jhm",
+                "GHSA-r5fr-rjxr-66jc"
+              ],
+              "max_severity": "8.1"
+            }
+          ],
+          "vulnerabilities": [
+            {
+              "id": "GHSA-29mw-wpgm-hmr9",
+              "summary": "Regular Expression Denial of Service (ReDoS) in lodash",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "npm",
+                    "name": "lodash",
+                    "purl": "pkg:npm/lodash"
+                  },
+                  "ranges": [
+                    {
+                      "events": [
+                        {
+                          "introduced": "4.0.0"
+                        },
+                        {
+                          "fixed": "4.17.21"
+                        }
+                      ],
+                      "type": "SEMVER"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "GHSA-35jh-r3h4-6jhm",
+              "summary": "Command Injection in lodash",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "npm",
+                    "name": "lodash",
+                    "purl": "pkg:npm/lodash"
+                  },
+                  "ranges": [
+                    {
+                      "events": [
+                        {
+                          "introduced": "0"
+                        },
+                        {
+                          "fixed": "4.17.21"
+                        }
+                      ],
+                      "type": "SEMVER"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "GHSA-r5fr-rjxr-66jc",
+              "summary": "lodash vulnerable to Code Injection via `_.template` imports key names",
+              "affected": [
+                {
+                  "package": {
+                    "ecosystem": "npm",
+                    "name": "lodash",
+                    "purl": "pkg:npm/lodash"
+                  },
+                  "ranges": [
+                    {
+                      "events": [
+                        {
+                          "introduced": "4.0.0"
+                        },
+                        {
+                          "fixed": "4.18.0"
+                        }
+                      ],
+                      "type": "SEMVER"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
