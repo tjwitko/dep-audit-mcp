@@ -57,3 +57,7 @@ No build step. Run directly by an MCP client via:
   `summarizeFindings` used it as a loop variable (`for (const package of ...)`) and failed
   `node --check` with "Unexpected strict mode reserved word" — use `pkg` instead. Worth
   rechecking if any future delegated JS code iterates over anything called "package".
+- **`sample-osv-output.json` cost real tokens to create the first time**, because nothing
+  demonstrated `osv-scanner`'s schema before this repo existed — that's the expensive case
+  `context_files` doesn't fix (see `local-delegate-mcp/CLAUDE.md`'s `context_files` note). It's
+  a sunk cost now: any future delegation touching this schema reuses the file for free.
