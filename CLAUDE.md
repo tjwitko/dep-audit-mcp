@@ -49,6 +49,9 @@ No build step. Run directly by an MCP client via:
   running — it can only report findings for the calling model to act on.
 - **Does not cover Terraform** or other IaC — that's a misconfiguration-scanning problem
   (`tfsec`, `checkov`), not a known-vulnerable-package-version problem. Don't imply it's covered.
+  `../terraform-guard-mcp` fills this gap for Terraform specifically (AWS misconfigurations
+  against `terraform show -json` plan output) — and unlike this tool, it actually blocks rather
+  than only reporting, by owning the plan→apply path itself.
 - **Never use `spawnSync(..., { shell: true })` with an args array here** — Node flags that
   combination (DEP0190) as unsafe in general, even in cases like the `osv-scanner` prerequisite
   check where the command is hardcoded and there's no real injection risk. Use a direct argv
