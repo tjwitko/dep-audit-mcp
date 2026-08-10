@@ -52,6 +52,11 @@ No build step. Run directly by an MCP client via:
   `../terraform-guard-mcp` fills this gap for Terraform specifically (AWS misconfigurations
   against `terraform show -json` plan output) — and unlike this tool, it actually blocks rather
   than only reporting, by owning the plan→apply path itself.
+- **Does not cover hardcoded credentials either** — a vulnerable package version and a leaked API
+  key are unrelated problems, and osv-scanner sees neither the file contents nor the strings in
+  them. `../secret-guard-mcp` covers that (gitleaks, any language or config format), and like
+  terraform-guard it can actually block: the agent loop's `write_file` refuses content containing
+  a credential before it reaches disk.
 - **Never use `spawnSync(..., { shell: true })` with an args array here** — Node flags that
   combination (DEP0190) as unsafe in general, even in cases like the `osv-scanner` prerequisite
   check where the command is hardcoded and there's no real injection risk. Use a direct argv
