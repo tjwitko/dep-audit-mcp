@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { spawnSync } from "child_process";
 import path from "path";
+import { pathToFileURL } from "url";
 
 // A stdio MCP server inherits its entire parent environment by default even though it only
 // needs its own config vars — drop the rest, same guardrail as local-delegate-mcp.
@@ -22,7 +23,7 @@ sanitizeEnv(["PATH", "HOME", "SCAN_ROOT"]);
 // a careless/compromised `directory` argument from pointing the scanner somewhere unintended.
 const SCAN_ROOT = path.resolve(process.env.SCAN_ROOT || process.cwd());
 
-function resolveScanPath(relOrAbsPath, scanRoot) {
+export function resolveScanPath(relOrAbsPath, scanRoot) {
   const resolved = path.resolve(scanRoot, relOrAbsPath);
   if (resolved !== scanRoot && !resolved.startsWith(scanRoot + path.sep)) {
     throw new Error(`refuses to scan outside ${scanRoot}: ${relOrAbsPath}`);
@@ -33,7 +34,7 @@ function resolveScanPath(relOrAbsPath, scanRoot) {
 // CVSS v3 qualitative severity bands (FIRST.org standard): 9.0-10.0 critical, 7.0-8.9 high,
 // 4.0-6.9 moderate, 0.1-3.9 low, else unscored/unknown. OSV-Scanner reports a raw score
 // string per finding group, not a pre-bucketed label, so this has to be done here.
-function severityBand(scoreStr) {
+export function severityBand(scoreStr) {
   const score = parseFloat(scoreStr);
   if (Number.isNaN(score)) return "unknown";
   if (score >= 9.0) return "critical";
@@ -53,7 +54,7 @@ const SEVERITY_THRESHOLDS = ["low", "moderate", "high", "critical"];
 // matched something — a clean scan returns `results: []` with no enumeration of what was
 // actually checked (that count only exists in the CLI's human-readable stderr). Don't rename
 // this back; "packagesScanned: 0" reads as "the scan didn't run," which is wrong.
-function summarizeFindings(osvResult) {
+export function summarizeFindings(osvResult) {
   const result = { critical: [], high: [], moderate: [], low: [], unknown: [], packagesWithFindings: 0 };
   if (!osvResult || !osvResult.results || osvResult.results.length === 0) {
     return result;
@@ -211,4 +212,8 @@ async function main() {
   await server.connect(transport);
   console.error("dep-audit MCP server running on stdio");
 }
-main().catch(console.error);
+// Only when run as a server, not when imported. Everything in this file lives in one module, so a
+// test that imports severityBand would otherwise start an MCP server on stdio and hang.
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (invokedDirectly) main().catch(console.error);
