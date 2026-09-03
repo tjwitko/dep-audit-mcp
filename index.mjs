@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { spawnSync } from "child_process";
+import { readFileSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 
@@ -97,6 +98,78 @@ export function summarizeFindings(osvResult) {
   }
 
   return result;
+}
+
+// Which packages this project declares itself, per ecosystem. A finding in one of these is in
+// something the project chose; a transitive one arrived through something else.
+//
+// A deliverable met 28 high-and-critical findings by writing a section arguing they were SSH
+// vulnerabilities in golang.org/x/crypto that could not affect code using only the standard
+// library. That was true of the 22 x/crypto findings -- and it silently generalised over 6 more in
+// github.com/jackc/pgx/v5, including a SQL injection, in the Postgres driver its own main.go
+// imports on line 16. The report gave it counts and CVE summaries and no way to see that the set it
+// examined was not the set it was dismissing.
+//
+// Unknown is never reported as transitive. Calling a direct dependency transitive is the direction
+// that lets a reader put a finding down.
+export function directDependencies(dir) {
+  const direct = new Set();
+  let known = false;
+
+  // Go: `// indirect` is the marker the toolchain itself maintains.
+  try {
+    const gomod = readFileSync(path.join(dir, "go.mod"), "utf8");
+    known = true;
+    for (const m of gomod.matchAll(/^\s*(?:require\s+)?([\w.\-]+\/[^\s]+)\s+v[^\s]+(.*)$/gm)) {
+      if (!/\/\/\s*indirect/.test(m[2])) direct.add(m[1]);
+    }
+  } catch {
+    /* no go.mod */
+  }
+
+  // npm: everything the manifest declares, dev included -- a vulnerable test-only package is still
+  // one this project chose.
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+    known = true;
+    for (const field of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+      for (const name of Object.keys(pkg[field] || {})) direct.add(name);
+    }
+  } catch {
+    /* no package.json */
+  }
+
+  // Python: requirements.txt and PEP 621 pyproject dependencies.
+  try {
+    const reqs = readFileSync(path.join(dir, "requirements.txt"), "utf8");
+    known = true;
+    for (const line of reqs.split("\n")) {
+      const m = /^\s*([A-Za-z0-9._-]+)\s*(?:[<>=!~[].*)?$/.exec(line.split("#")[0]);
+      if (m) direct.add(m[1].toLowerCase());
+    }
+  } catch {
+    /* no requirements.txt */
+  }
+  try {
+    const toml = readFileSync(path.join(dir, "pyproject.toml"), "utf8");
+    known = true;
+    for (const m of toml.matchAll(/^\s*"([A-Za-z0-9._-]+)\s*(?:[<>=!~].*)?"/gm)) direct.add(m[1].toLowerCase());
+  } catch {
+    /* no pyproject.toml */
+  }
+
+  return { direct, known };
+}
+
+/** true / false / null, where null means no manifest was readable for that ecosystem. */
+export function classifyDirect(name, { direct, known }) {
+  if (!known) return null;
+  if (direct.has(name) || direct.has(name.toLowerCase())) return true;
+  // A Go module path is declared as the module root; a finding may name a subpackage of it.
+  for (const d of direct) {
+    if (name.startsWith(`${d}/`)) return true;
+  }
+  return false;
 }
 
 const server = new McpServer({
@@ -193,11 +266,39 @@ server.tool(
     );
     const worstFound = [...SEVERITY_THRESHOLDS].reverse().find((sev) => counts[sev] > 0) || "none";
 
+    // Tag each finding with whether the project declares that package itself. Reported per finding
+    // AND as a count, because the count is what a reader acts on and a per-finding flag buried in a
+    // list of 28 is one nobody adds up.
+    const manifest = directDependencies(resolvedDir);
+    for (const f of findings) f.direct = classifyDirect(f.package, manifest);
+    const directFindings = findings.filter((f) => f.direct === true);
+    const unclassified = findings.filter((f) => f.direct === null);
+
+    const directPackages = [...new Set(directFindings.map((f) => f.package))];
+    const guidance = !manifest.known
+      ? "No dependency manifest was readable here, so no finding could be classified as direct or " +
+        "transitive. Treat every one as potentially yours."
+      : directFindings.length === 0
+        ? `None of these are in packages this project declares itself — every finding arrived ` +
+          `through something else. That is not the same as being unreachable: a transitive package ` +
+          `still runs in your process. Check whether your code path reaches the vulnerable function ` +
+          `before deciding it does not apply.`
+        : `${directFindings.length} of ${findings.length} finding(s) are in packages this project ` +
+          `DECLARES ITSELF — ${directPackages.join(", ")}. These are not somebody else's ` +
+          `dependencies. If you write up why a set of findings does not apply to you, say which ` +
+          `packages the write-up covers: an argument about one package does not carry to another, ` +
+          `and a project has explained away SSH vulnerabilities in a transitive crypto library while ` +
+          `leaving a SQL injection in the database driver it imports directly.`;
+
     const report = {
       directory: resolvedDir,
       packagesWithFindings: summary.packagesWithFindings,
       counts,
       worstSeverityFound: worstFound,
+      directFindings: directFindings.length,
+      directPackages,
+      unclassifiedFindings: unclassified.length,
+      guidance,
       findings,
     };
 
