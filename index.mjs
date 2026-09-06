@@ -120,7 +120,12 @@ export function directDependencies(dir) {
   try {
     const gomod = readFileSync(path.join(dir, "go.mod"), "utf8");
     known = true;
-    for (const m of gomod.matchAll(/^\s*(?:require\s+)?([\w.\-]+\/[^\s]+)\s+v[^\s]+(.*)$/gm)) {
+    // [ \t], not \s, on both spans. \s crosses newlines, so a module path at the end of one line
+    // and a version at the start of the next matched as one requirement -- and the `// indirect`
+    // taken from that second line then decided the first line's classification. That fails in the
+    // direction this whole classifier exists to avoid: a DIRECT dependency reported as transitive
+    // is what lets a reader put a finding down.
+    for (const m of gomod.matchAll(/^[ \t]*(?:require[ \t]+)?([\w.\-]+\/[^\s]+)[ \t]+v[^\s]+(.*)$/gm)) {
       if (!/\/\/\s*indirect/.test(m[2])) direct.add(m[1]);
     }
   } catch {

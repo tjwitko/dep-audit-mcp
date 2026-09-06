@@ -101,3 +101,23 @@ test("a project with two ecosystems classifies both", () => {
     }
   );
 });
+
+// The spans in the go.mod reader used \s, which crosses newlines: a module path at the end of one
+// line and a version at the start of the next matched as one requirement, and the `// indirect` on
+// that second line then decided the first line's classification. It fails in the direction this
+// classifier exists to avoid -- a DIRECT dependency reported as transitive is what lets a reader
+// put a finding down. Same shape as the proximity spans in the task-requirement readers.
+test("a requirement cannot be assembled from two lines", () => {
+  inProject({ "go.mod": "require (\n\tgithub.com/jackc/pgx/v5\n\tv5.5.2 // indirect\n)\n" }, (dir) => {
+    const m = directDependencies(dir);
+    assert.equal(m.direct.size, 0, "a path with no version on its own line is not a requirement");
+  });
+});
+
+test("a tab-indented require block still reads", () => {
+  inProject({ "go.mod": "require (\n\tgithub.com/jackc/pgx/v5 v5.5.2\n\tgolang.org/x/crypto v0.24.0 // indirect\n)\n" }, (dir) => {
+    const m = directDependencies(dir);
+    assert.equal(classifyDirect("github.com/jackc/pgx/v5", m), true);
+    assert.equal(classifyDirect("golang.org/x/crypto", m), false);
+  });
+});
