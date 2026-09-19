@@ -1,5 +1,5 @@
 {
-  "name": "dep-audit-mcp",
+  "name": "@tjwitko/dep-audit-mcp",
   "version": "1.0.0",
   "private": true,
   "type": "module",
