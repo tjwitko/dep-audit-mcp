@@ -1,0 +1,23 @@
+# The contract this repository is held to, read by agent-gate in .github/workflows/gate.yml.
+#
+# Six checks are gated on what the task asked for. This file exists so the ones that apply here
+# actually run, and it states only what is true of this project: a requirement written to switch a
+# check on would be a fabricated requirement, which is worse than a missing check.
+
+An MCP server that reports known vulnerabilities in a project's declared dependencies.
+
+WHAT IT MUST DO
+- Expose `check_dependencies` over MCP stdio, scanning a directory with osv-scanner.
+- Report findings as structured data, with severity and a fixed version where one exists.
+- Stay inside the directory it was pointed at.
+
+HOW WE WILL JUDGE IT
+- Automated tests that someone else can run, covering the tools themselves and not only the
+  helpers behind them.
+- Errors distinguished from faults: osv-scanner exiting non-zero because it found vulnerabilities
+  has succeeded, and must not be reported as a failure. Only unparseable output is an error.
+- A check that cannot run must say so, and never pass.
+
+NOT IN SCOPE
+- No deployment artifacts. This is an MCP server distributed as a package, not a deployed service.
+- No records are stored here, and no credentials are held.
