@@ -35,7 +35,7 @@ imported directly, in the same write-up.
 ### Install
 
 ```bash
-npm install --save-dev github:tjwitko/dep-audit-mcp#v1.0.1
+npm install --save-dev github:tjwitko/dep-audit-mcp#v1.0.2
 ```
 
 ### Register it with an MCP client

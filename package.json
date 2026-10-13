@@ -1,6 +1,6 @@
 {
   "name": "@tjwitko/dep-audit-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "description": "MCP server exposing a check_dependencies tool backed by OSV-Scanner, for gating new dependencies (any language OSV-Scanner supports) on critical/high vulnerabilities before they're trusted.",
