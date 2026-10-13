@@ -203,9 +203,13 @@ export function classifyDirect(name, { direct, known }) {
   return false;
 }
 
+// Read, not written in. This said "1.0.0" through v1.0.1 and v1.0.2, so an MCP client asking the
+// server what it was got an answer two releases old.
+const { version: VERSION } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+
 const server = new McpServer({
   name: "dep-audit",
-  version: "1.0.0",
+  version: VERSION,
 });
 
 server.tool(
