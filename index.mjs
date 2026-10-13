@@ -100,6 +100,32 @@ export function summarizeFindings(osvResult) {
   return result;
 }
 
+/**
+ * What an osv-scanner run said, read by exit status before stdout.
+ *
+ * This was `JSON.parse(scan.stdout || "{}")`, and osv-scanner writes nothing to stdout when it has
+ * nothing to scan (exit 128) or fails outright (127). Both became `{}`, which summarises to zero
+ * findings: a project whose only manifest is a package.json -- which osv-scanner does not read
+ * without a lockfile -- was reported clean, and so was a scanner that crashed.
+ *
+ * Exit codes are osv-scanner's: 0 nothing found, 1 vulnerabilities found, 127 general error, 128 no
+ * package sources found. Anything else, and 0 or 1 without parseable JSON, is an error: a scan that
+ * cannot be read is not a scan that found nothing.
+ */
+export function readScan(status, stdout, stderr = "") {
+  if (status === 128) return { noSources: true };
+  if (status === 0 || status === 1) {
+    try {
+      return { parsed: JSON.parse(stdout) };
+    } catch {
+      /* falls through to the error below */
+    }
+  }
+  return {
+    error: `osv-scanner did not produce a result (exit ${status ?? "none"}). stderr: ${stderr.slice(0, 2000) || "(empty)"}`,
+  };
+}
+
 // Which packages this project declares itself, per ecosystem. A finding in one of these is in
 // something the project chose; a transitive one arrived through something else.
 //
@@ -245,22 +271,29 @@ server.tool(
       maxBuffer: 50 * 1024 * 1024,
     });
 
-    // osv-scanner exits 1 when it finds vulnerabilities — that's a successful scan with
-    // results, not a failure. Only treat it as an error if there's no parseable JSON at all.
-    let parsed;
-    try {
-      parsed = JSON.parse(scan.stdout || "{}");
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `osv-scanner produced no parseable output (exit ${scan.status}). stderr: ${scan.stderr?.slice(0, 2000) || "(empty)"}`,
-          },
-        ],
-        isError: true,
-      };
+    // osv-scanner exits 1 when it finds vulnerabilities — that's a successful scan with results,
+    // not a failure. See readScan for the cases that are failures, and for the one that is neither.
+    const read = readScan(scan.status, scan.stdout, scan.stderr);
+    if (read.error) {
+      return { content: [{ type: "text", text: read.error }], isError: true };
     }
+    if (read.noSources) {
+      // Not clean and not an error: nothing here is a file osv-scanner reads. Said in the report
+      // rather than as zero findings, because the two are only equivalent when nothing declares a
+      // dependency -- and a package.json with dependencies and no lockfile is exactly this case.
+      const report = {
+        directory: resolvedDir,
+        scanned: false,
+        note:
+          "osv-scanner found no file it can read here. It reads lockfiles, and of manifests only " +
+          "requirements*.txt, go.mod and pom.xml — package.json, Cargo.toml, pyproject.toml, Pipfile, " +
+          "build.gradle, Gemfile and composer.json are read only through their lockfiles. If this " +
+          "project declares dependencies, none of them was checked: commit a lockfile.",
+        findings: [],
+      };
+      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+    }
+    const parsed = read.parsed;
 
     const summary = summarizeFindings(parsed);
     const includedSeverities = SEVERITY_THRESHOLDS.slice(thresholdIndex);
@@ -297,6 +330,7 @@ server.tool(
 
     const report = {
       directory: resolvedDir,
+      scanned: true,
       packagesWithFindings: summary.packagesWithFindings,
       counts,
       worstSeverityFound: worstFound,

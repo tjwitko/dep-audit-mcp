@@ -132,9 +132,15 @@ that says so:
 - **It does not find hardcoded credentials.** A vulnerable version and a leaked key are unrelated,
   and OSV sees neither file contents nor strings. Use
   [secret-guard-mcp](https://github.com/tjwitko/secret-guard-mcp).
-- **Without a lockfile, results are indicative rather than authoritative.** OSV-Scanner resolves the
-  transitive graph to minimum-satisfying versions, which is not what installs. `==` pins in
-  `requirements.txt` constrain direct dependencies only. Commit a lockfile.
+- **Without a lockfile, most manifests are not scanned at all.** OSV-Scanner reads lockfiles, and of
+  manifests only `requirements*.txt`, `go.mod` and `pom.xml`. A `package.json`, `Cargo.toml`,
+  `pyproject.toml`, `Pipfile`, `build.gradle`, `Gemfile` or `composer.json` on its own is invisible
+  to it. When nothing in the directory is readable the report says `"scanned": false` rather than
+  returning zero findings — it used to return zero findings, which read as clean.
+- **For the three it does read, results without a lockfile are indicative rather than
+  authoritative.** OSV-Scanner resolves the transitive graph to minimum-satisfying versions, which is
+  not what installs. `==` pins in `requirements.txt` constrain direct dependencies only. Commit a
+  lockfile.
 
 ---
 

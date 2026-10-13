@@ -25,6 +25,19 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
 
+      # The scanner this server wraps, at the version agent-gate's control-tooling pins. readScan's
+      # tests run it for real, because the defect they cover was a wrong belief about what it prints
+      # when it has nothing to read.
+      - name: osv-scanner
+        env:
+          OSV_VERSION: "2.4.0"
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          sudo chmod +x /usr/local/bin/osv-scanner
+          osv-scanner --version
+
       # A skipped test is not a passing one. Suites here skip when a scanner they drive is absent,
       # which is correct locally and worthless in CI: the job would report green having verified
       # nothing about the half that matters. Asserting the count keeps that visible.
