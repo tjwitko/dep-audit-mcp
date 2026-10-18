@@ -1,7 +1,7 @@
 # The test suite, on every push and pull request.
 #
 # This repository is published, tagged and installed by other people. "It passed on my machine" is
-# the guarantee agent-gate exists to replace, so it is not the guarantee this repository ships with
+# the guarantee wolfproof exists to replace, so it is not the guarantee this repository ships with
 # either.
 name: test
 
@@ -25,7 +25,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
 
-      # The scanner this server wraps, at the version agent-gate's control-tooling pins. readScan's
+      # The scanner this server wraps, at the version wolfproof's control-tooling pins. readScan's
       # tests run it for real, because the defect they cover was a wrong belief about what it prints
       # when it has nothing to read.
       - name: osv-scanner

@@ -124,7 +124,7 @@ Stated plainly, because a scanner that appears to cover something it does not is
 that says so:
 
 - **It cannot block an install.** It reports; nothing stops a later `npm install`. Enforcement
-  belongs at a boundary that owns the action — see [agent-gate](https://github.com/tjwitko/agent-gate),
+  belongs at a boundary that owns the action — see [wolfproof](https://github.com/tjwitko/wolfproof),
   which fails a build on what this reports.
 - **It does not cover Terraform or other infrastructure-as-code.** Provider and module risk is a
   misconfiguration problem, not a known-vulnerable-version problem. Use
@@ -186,10 +186,10 @@ kept as the reference for anyone changing the parsing.
 
 ---
 
-## Part of agent-gate
+## Part of wolfproof
 
 This is one of four control servers behind
-[agent-gate](https://github.com/tjwitko/agent-gate), which runs them together and fails a build on
+[wolfproof](https://github.com/tjwitko/wolfproof), which runs them together and fails a build on
 what they find. It works standalone with any MCP client.
 
 ## License
