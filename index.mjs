@@ -9,7 +9,10 @@ import path from "path";
 import { pathToFileURL } from "url";
 
 // A stdio MCP server inherits its entire parent environment by default even though it only
-// needs its own config vars — drop the rest, same guardrail as local-delegate-mcp.
+// needs its own config vars — drop the rest, same guardrail as local-delegate-mcp. Called from
+// main(), not as this file loads: importing it for its functions must not wipe the importer's
+// environment. It did, and the tests that import it lost NODE_TEST_CONTEXT, so `npm test` reported
+// each file as one test ("tests 3") and hid skips and counts inside them.
 function sanitizeEnv(allowlist) {
   for (const key in process.env) {
     if (!allowlist.includes(key)) {
@@ -17,7 +20,6 @@ function sanitizeEnv(allowlist) {
     }
   }
 }
-sanitizeEnv(["PATH", "HOME", "SCAN_ROOT"]);
 
 // Sole allowed scan boundary — defaults to this process's cwd (wherever the MCP client
 // launched it from), same containment pattern as local-delegate-mcp's CONTEXT_ROOT. Prevents
@@ -352,6 +354,8 @@ server.tool(
 );
 
 async function main() {
+  // First, before the server can take a call: every osv-scanner spawn inherits process.env.
+  sanitizeEnv(["PATH", "HOME", "SCAN_ROOT"]);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("dep-audit MCP server running on stdio");
