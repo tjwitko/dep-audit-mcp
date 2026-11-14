@@ -69,3 +69,14 @@ No build step. Run directly by an MCP client via:
   demonstrated `osv-scanner`'s schema before this repo existed — that's the expensive case
   `context_files` doesn't fix (see `local-delegate-mcp/CLAUDE.md`'s `context_files` note). It's
   a sunk cost now: any future delegation touching this schema reuses the file for free.
+
+## How changes land
+
+Changes to this repository go through a pull request, not a push to `main`.
+
+- Work on a branch, push it, and open a pull request.
+- Wait for the four required checks (`agent-gate` and the three `tests` jobs) before merging.
+- Do not merge your own pull request unless the user says to; they merge.
+
+One exception: the wolfproof release moves this repository's wolfproof pin with its own script,
+which commits `.github/workflows/gate.yml` and pushes straight to `main`. Leave that as it is.
