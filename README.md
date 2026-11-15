@@ -106,7 +106,10 @@ Every finding carries `direct`:
 | `null` | no manifest was readable, so nothing could be classified |
 
 Manifests read for this: `package.json`, `go.mod` (respecting `// indirect`), `requirements.txt`
-and `pyproject.toml`.
+and `pyproject.toml`. Python requirements are read as PEP 508 — extras, environment markers and URL
+references included, CRLF or LF — and names compare PEP 503-normalised, as osv-scanner reports
+them. In `pyproject.toml` only PEP 621 requirement strings are read: a project that declares its
+dependencies in Poetry's `[tool.poetry.dependencies]` tables has them classified `false`.
 
 **`null` is never reported as transitive.** Calling a direct dependency transitive is the direction
 that gets a real finding dismissed, so an unknown stays unknown and the guidance says to treat every
