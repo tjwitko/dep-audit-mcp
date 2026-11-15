@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
@@ -46,5 +46,30 @@ test("a package.json with no lockfile really is exit 128 with empty stdout", { s
     assert.deepEqual(readScan(r.status, r.stdout, r.stderr), { noSources: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// resolveScanPath bounds the directory the caller names (test/paths.test.mjs). This pins the walk
+// below it: osv-scanner 2.4.0 does not follow a symlink, to a file or to a directory, while it
+// walks a tree. A manifest with no packages keeps this offline -- osv-scanner reports each file it
+// extracted on stderr before it queries anything, and a tree of only links extracts nothing.
+test("osv-scanner does not follow a symlink out of the scanned tree", { skip: !haveScanner && "osv-scanner not installed" }, () => {
+  const base = mkdtempSync(path.join(tmpdir(), "readscan-links-"));
+  try {
+    const outside = path.join(base, "outside");
+    const dir = path.join(base, "project");
+    mkdirSync(outside);
+    mkdirSync(dir);
+    writeFileSync(path.join(outside, "requirements.txt"), "# no packages\n");
+    const direct = spawnSync("osv-scanner", ["scan", "-r", outside, "--format", "json"], { encoding: "utf8" });
+    assert.match(direct.stderr, /Scanned .*requirements\.txt/, "the planted manifest must be readable");
+
+    symlinkSync(path.join(outside, "requirements.txt"), path.join(dir, "requirements.txt"));
+    symlinkSync(outside, path.join(dir, "linked"));
+    const r = spawnSync("osv-scanner", ["scan", "-r", dir, "--format", "json"], { encoding: "utf8" });
+    assert.doesNotMatch(r.stderr, /Scanned /);
+    assert.deepEqual(readScan(r.status, r.stdout, r.stderr), { noSources: true });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });
