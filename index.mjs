@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, realpathSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 
@@ -26,12 +26,39 @@ function sanitizeEnv(allowlist) {
 // a careless/compromised `directory` argument from pointing the scanner somewhere unintended.
 const SCAN_ROOT = path.resolve(process.env.SCAN_ROOT || process.cwd());
 
+// Real paths, not resolved text. path.resolve() only normalises the string, so a symlink inside
+// the root that points outside it passed, and a root reached through a symlink refused the real
+// spelling of paths under it. Both the root and the target are resolved with realpathSync and the
+// real target is what comes back, so the scanner reads the directory that was checked rather than
+// a link that could be followed somewhere else. A target that does not exist is refused, except
+// that a path below a link out of the root is refused as outside: the walk up to the nearest
+// existing ancestor is there so a refusal never says what does or does not exist out there.
+//
+// The same function, line for line, is secret-guard-mcp's resolveScanPath, identity-guard-mcp's
+// resolveScanPath and terraform-guard-mcp's resolveWorkingDir. Change them together.
 export function resolveScanPath(relOrAbsPath, scanRoot) {
-  const resolved = path.resolve(scanRoot, relOrAbsPath);
-  if (resolved !== scanRoot && !resolved.startsWith(scanRoot + path.sep)) {
+  const root = realpathOrNull(scanRoot);
+  if (root === null) throw new Error(`containment root does not exist: ${scanRoot}`);
+  const requested = path.resolve(root, relOrAbsPath);
+  let existing = requested;
+  let real = realpathOrNull(existing);
+  while (real === null && path.dirname(existing) !== existing) {
+    existing = path.dirname(existing);
+    real = realpathOrNull(existing);
+  }
+  if (real === null || (real !== root && !real.startsWith(root + path.sep))) {
     throw new Error(`refuses to scan outside ${scanRoot}: ${relOrAbsPath}`);
   }
-  return resolved;
+  if (existing !== requested) throw new Error(`does not exist: ${relOrAbsPath}`);
+  return real;
+}
+
+function realpathOrNull(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
 }
 
 // CVSS v3 qualitative severity bands (FIRST.org standard): 9.0-10.0 critical, 7.0-8.9 high,

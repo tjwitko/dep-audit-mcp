@@ -148,8 +148,9 @@ that says so:
 
 - **Environment sanitization.** Only `PATH`, `HOME` and `SCAN_ROOT` survive startup; everything else
   in `process.env` is deleted, so the server never inherits secrets from whatever spawned it.
-- **Scan containment.** `directory` must resolve inside `SCAN_ROOT` — no `../` escapes, no absolute
-  paths elsewhere on disk. A scan pointed somewhere else is not a result about your project in
+- **Scan containment.** `directory` must exist and resolve inside `SCAN_ROOT` — no `../` escapes, no
+  absolute paths elsewhere on disk, and no symlinks out: the comparison is between real paths, and
+  osv-scanner does not follow symlinks while it walks the tree. A scan pointed somewhere else is not a result about your project in
   either direction: its findings are someone else's and its silence proves nothing about you.
 - **No shell.** The prerequisite check and the scan are spawned as direct argv arrays, never through
   a shell.
