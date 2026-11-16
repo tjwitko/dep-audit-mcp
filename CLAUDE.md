@@ -43,7 +43,9 @@ No build step. Run directly by an MCP client via:
   `severityBand()` buckets it (CVSS v3 qualitative ranges: ≥9.0 critical, ≥7.0 high, ≥4.0
   moderate, >0 low, else unknown) — don't assume the JSON hands you "critical"/"high" directly.
 - **`directory` must resolve within `SCAN_ROOT`** (default: server's cwd at startup, override
-  via `SCAN_ROOT` env var) — same path-containment pattern as `local-delegate-mcp`'s
+  via `SCAN_ROOT` env var), compared as real paths so a symlink out of the root is refused, and
+  `resolveScanPath` is line for line the function in the three sibling servers — same
+  path-containment pattern as `local-delegate-mcp`'s
   `CONTEXT_ROOT`/`resolveContextPath`.
 - **Advisory only.** This tool cannot block a subsequent `npm install`/`pip install`/etc. from
   running — it can only report findings for the calling model to act on.

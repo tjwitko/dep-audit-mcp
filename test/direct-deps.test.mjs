@@ -121,3 +121,82 @@ test("a tab-indented require block still reads", () => {
     assert.equal(classifyDirect("golang.org/x/crypto", m), false);
   });
 });
+
+// The Python readers below all failed the same way, the way this classifier exists to prevent: a
+// line they could not read was not added to the direct set, so its findings were reported as
+// transitive.
+
+// A requirements.txt written on Windows. Split on "\n", every line kept its "\r"; `.*` stops at
+// "\r", `$` then failed, and every line carrying a version -- nearly all of them -- was skipped.
+test("requirements.txt with CRLF line endings", () => {
+  inProject({ "requirements.txt": "requests==2.31.0\r\nFlask>=3.0\r\nboto3\r\n" }, (dir) => {
+    const m = directDependencies(dir);
+    assert.equal(classifyDirect("requests", m), true);
+    assert.equal(classifyDirect("flask", m), true);
+    assert.equal(classifyDirect("boto3", m), true);
+    assert.equal(classifyDirect("urllib3", m), false);
+  });
+});
+
+// PEP 508: extras, environment markers with and without a version, a parenthesised version and a
+// direct URL reference are all a requirement on the named package.
+test("requirements.txt: extras, environment markers and URL references", () => {
+  const reqs = [
+    "requests[socks]>=2.31",
+    "uvicorn[standard]",
+    "importlib-metadata ; python_version<'3.8'",
+    "tomli;python_version<\"3.11\"",
+    "pydantic==2.5.0 ; python_version >= '3.8'",
+    "Django (>=4.2)",
+    "mypkg @ https://example.invalid/mypkg-1.0.tar.gz#sha256=00",
+    "-r other.txt",
+    "--index-url https://example.invalid/simple",
+    "",
+  ].join("\n");
+  inProject({ "requirements.txt": reqs }, (dir) => {
+    const m = directDependencies(dir);
+    for (const name of ["requests", "uvicorn", "importlib-metadata", "tomli", "pydantic", "django", "mypkg"]) {
+      assert.equal(classifyDirect(name, m), true, name);
+    }
+    assert.equal(m.direct.has("-r"), false);
+    assert.equal(classifyDirect("urllib3", m), false);
+  });
+});
+
+// The pyproject reader allowed only [<>=!~] after the name, and only a string that began a line.
+test("pyproject.toml: extras, markers, single quotes and the inline array form", () => {
+  const toml = [
+    "[project]",
+    'name = "webhook-receiver"',
+    'requires-python = ">=3.10"',
+    "dependencies = [",
+    '  "requests[socks]>=2.31",',
+    "  \"importlib-metadata; python_version<'3.8'\",",
+    "  'httpx>=0.27',",
+    '  "uvicorn[standard]",',
+    "]",
+    "",
+    "[project.optional-dependencies]",
+    'dev = ["pytest>=8", "ruff"]',
+    "",
+  ].join("\n");
+  inProject({ "pyproject.toml": toml }, (dir) => {
+    const m = directDependencies(dir);
+    for (const name of ["requests", "importlib-metadata", "httpx", "uvicorn", "pytest", "ruff"]) {
+      assert.equal(classifyDirect(name, m), true, name);
+    }
+    assert.equal(classifyDirect("urllib3", m), false);
+  });
+});
+
+// osv-scanner reports PyPI packages under their normalised name (PEP 503: lowercase, runs of
+// "-", "_" and "." as one "-"). Verified with 2.4.0: `python_jose==3.3.0` in requirements.txt
+// comes back as `python-jose`. Lowercasing alone missed it.
+test("python names compare after PEP 503 normalisation", () => {
+  inProject({ "requirements.txt": "python_jose==3.3.0\nzope.interface>=6\n" }, (dir) => {
+    const m = directDependencies(dir);
+    assert.equal(classifyDirect("python-jose", m), true);
+    assert.equal(classifyDirect("zope-interface", m), true);
+    assert.equal(classifyDirect("ecdsa", m), false);
+  });
+});

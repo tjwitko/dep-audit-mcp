@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { spawnSync } from "child_process";
-import { readFileSync } from "fs";
+import { readFileSync, realpathSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 
@@ -26,12 +26,39 @@ function sanitizeEnv(allowlist) {
 // a careless/compromised `directory` argument from pointing the scanner somewhere unintended.
 const SCAN_ROOT = path.resolve(process.env.SCAN_ROOT || process.cwd());
 
+// Real paths, not resolved text. path.resolve() only normalises the string, so a symlink inside
+// the root that points outside it passed, and a root reached through a symlink refused the real
+// spelling of paths under it. Both the root and the target are resolved with realpathSync and the
+// real target is what comes back, so the scanner reads the directory that was checked rather than
+// a link that could be followed somewhere else. A target that does not exist is refused, except
+// that a path below a link out of the root is refused as outside: the walk up to the nearest
+// existing ancestor is there so a refusal never says what does or does not exist out there.
+//
+// The same function, line for line, is secret-guard-mcp's resolveScanPath, identity-guard-mcp's
+// resolveScanPath and terraform-guard-mcp's resolveWorkingDir. Change them together.
 export function resolveScanPath(relOrAbsPath, scanRoot) {
-  const resolved = path.resolve(scanRoot, relOrAbsPath);
-  if (resolved !== scanRoot && !resolved.startsWith(scanRoot + path.sep)) {
+  const root = realpathOrNull(scanRoot);
+  if (root === null) throw new Error(`containment root does not exist: ${scanRoot}`);
+  const requested = path.resolve(root, relOrAbsPath);
+  let existing = requested;
+  let real = realpathOrNull(existing);
+  while (real === null && path.dirname(existing) !== existing) {
+    existing = path.dirname(existing);
+    real = realpathOrNull(existing);
+  }
+  if (real === null || (real !== root && !real.startsWith(root + path.sep))) {
     throw new Error(`refuses to scan outside ${scanRoot}: ${relOrAbsPath}`);
   }
-  return resolved;
+  if (existing !== requested) throw new Error(`does not exist: ${relOrAbsPath}`);
+  return real;
+}
+
+function realpathOrNull(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return null;
+  }
 }
 
 // CVSS v3 qualitative severity bands (FIRST.org standard): 9.0-10.0 critical, 7.0-8.9 high,
@@ -140,6 +167,21 @@ export function readScan(status, stdout, stderr = "") {
 //
 // Unknown is never reported as transitive. Calling a direct dependency transitive is the direction
 // that lets a reader put a finding down.
+// PEP 508, as far as deciding which package a requirement names: the name, optional extras, then
+// a version, an environment marker (";"), a parenthesised version or a URL reference ("@").
+// Capture group 1 of PEP508_HEAD is the name; PEP508_MORE is the character that starts whatever
+// follows it, and each reader says for itself where that ends.
+const PEP508_HEAD = String.raw`([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*`;
+const PEP508_MORE = "[<>=!~;@(]";
+const REQUIREMENTS_LINE = new RegExp(String.raw`^\s*${PEP508_HEAD}(?:${PEP508_MORE}.*)?$`);
+// A requirement string opens a line or follows "[" or "," in an array, and is closed by the quote
+// that opened it, so a marker's inner quotes of the other kind do not end it.
+const PYPROJECT_REQUIREMENT = new RegExp(String.raw`(?:^|[[,])\s*(["'])${PEP508_HEAD}(?:${PEP508_MORE}.*?)?\1`, "gm");
+
+// PEP 503: lowercase, and any run of "-", "_" and "." is one "-". osv-scanner reports PyPI
+// packages under this name (2.4.0: `python_jose` in requirements.txt comes back `python-jose`).
+const pep503 = (name) => name.replace(/[-_.]+/g, "-").toLowerCase();
+
 export function directDependencies(dir) {
   const direct = new Set();
   let known = false;
@@ -172,13 +214,18 @@ export function directDependencies(dir) {
     /* no package.json */
   }
 
-  // Python: requirements.txt and PEP 621 pyproject dependencies.
+  // Python: requirements.txt and PEP 621 pyproject dependencies. Both readers failed toward
+  // "transitive" on ordinary files: a requirements.txt with CRLF line endings (split on "\n",
+  // every versioned line kept its "\r" and failed `$`), a name followed by an environment marker
+  // with no version, and in pyproject.toml anything but `"name<op>..."` at the start of a line --
+  // extras, markers, single quotes and `dev = ["pytest>=8", "ruff"]` were all missed. Names are
+  // stored PEP 503-normalised, because that is how osv-scanner reports them.
   try {
     const reqs = readFileSync(path.join(dir, "requirements.txt"), "utf8");
     known = true;
-    for (const line of reqs.split("\n")) {
-      const m = /^\s*([A-Za-z0-9._-]+)\s*(?:[<>=!~[].*)?$/.exec(line.split("#")[0]);
-      if (m) direct.add(m[1].toLowerCase());
+    for (const line of reqs.split(/\r?\n/)) {
+      const m = REQUIREMENTS_LINE.exec(line.split("#")[0]);
+      if (m) direct.add(pep503(m[1]));
     }
   } catch {
     /* no requirements.txt */
@@ -186,7 +233,7 @@ export function directDependencies(dir) {
   try {
     const toml = readFileSync(path.join(dir, "pyproject.toml"), "utf8");
     known = true;
-    for (const m of toml.matchAll(/^\s*"([A-Za-z0-9._-]+)\s*(?:[<>=!~].*)?"/gm)) direct.add(m[1].toLowerCase());
+    for (const m of toml.matchAll(PYPROJECT_REQUIREMENT)) direct.add(pep503(m[2]));
   } catch {
     /* no pyproject.toml */
   }
@@ -197,7 +244,7 @@ export function directDependencies(dir) {
 /** true / false / null, where null means no manifest was readable for that ecosystem. */
 export function classifyDirect(name, { direct, known }) {
   if (!known) return null;
-  if (direct.has(name) || direct.has(name.toLowerCase())) return true;
+  if (direct.has(name) || direct.has(name.toLowerCase()) || direct.has(pep503(name))) return true;
   // A Go module path is declared as the module root; a finding may name a subpackage of it.
   for (const d of direct) {
     if (name.startsWith(`${d}/`)) return true;

@@ -106,7 +106,10 @@ Every finding carries `direct`:
 | `null` | no manifest was readable, so nothing could be classified |
 
 Manifests read for this: `package.json`, `go.mod` (respecting `// indirect`), `requirements.txt`
-and `pyproject.toml`.
+and `pyproject.toml`. Python requirements are read as PEP 508 — extras, environment markers and URL
+references included, CRLF or LF — and names compare PEP 503-normalised, as osv-scanner reports
+them. In `pyproject.toml` only PEP 621 requirement strings are read: a project that declares its
+dependencies in Poetry's `[tool.poetry.dependencies]` tables has them classified `false`.
 
 **`null` is never reported as transitive.** Calling a direct dependency transitive is the direction
 that gets a real finding dismissed, so an unknown stays unknown and the guidance says to treat every
@@ -148,8 +151,9 @@ that says so:
 
 - **Environment sanitization.** Only `PATH`, `HOME` and `SCAN_ROOT` survive startup; everything else
   in `process.env` is deleted, so the server never inherits secrets from whatever spawned it.
-- **Scan containment.** `directory` must resolve inside `SCAN_ROOT` — no `../` escapes, no absolute
-  paths elsewhere on disk. A scan pointed somewhere else is not a result about your project in
+- **Scan containment.** `directory` must exist and resolve inside `SCAN_ROOT` — no `../` escapes, no
+  absolute paths elsewhere on disk, and no symlinks out: the comparison is between real paths, and
+  osv-scanner does not follow symlinks while it walks the tree. A scan pointed somewhere else is not a result about your project in
   either direction: its findings are someone else's and its silence proves nothing about you.
 - **No shell.** The prerequisite check and the scan are spawned as direct argv arrays, never through
   a shell.

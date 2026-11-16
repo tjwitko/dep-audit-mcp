@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { severityBand, summarizeFindings, resolveScanPath } from "../index.mjs";
+import { severityBand, summarizeFindings } from "../index.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,10 +72,4 @@ test("a group id with no matching vulnerability record is dropped, not fabricate
   });
   assert.equal(r.packagesWithFindings, 1, "the package still counted as having matched");
   assert.deepEqual(r.critical, [], "but no finding is invented for the missing record");
-});
-
-test("the scan path cannot escape its root", () => {
-  assert.throws(() => resolveScanPath("../../../.aws", "/srv/project"));
-  assert.throws(() => resolveScanPath("/etc", "/srv/project"));
-  assert.equal(resolveScanPath("app", "/srv/project"), "/srv/project/app");
 });
